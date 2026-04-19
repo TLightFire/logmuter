@@ -9,8 +9,6 @@
 using zygisk::Api;
 using zygisk::AppSpecializeArgs;
 using zygisk::ServerSpecializeArgs;
-
-
 extern void restoreFunArm(void *addr, uint8_t *code,off_t len);
 extern void restoreFunArm64(void* addr, uint8_t *code,off_t len);
 class LogMute : public zygisk::ModuleBase {
@@ -19,22 +17,18 @@ public:
         this->api = api;
         this->env = env;
     }
-
     void preAppSpecialize(AppSpecializeArgs *args) override {
         // Use JNI to fetch our process name
         const char *process = env->GetStringUTFChars(args->nice_name, nullptr);
         preSpecialize(process);
         env->ReleaseStringUTFChars(args->nice_name, process);
     }
-
     void preServerSpecialize(ServerSpecializeArgs *args) override {
         preSpecialize("system_server");
     }
-
 private:
     Api *api;
     JNIEnv *env;
-
     void preSpecialize(const char *process) {
         // Demonstrate connecting to to companion process
         // We ask the companion for a random number
@@ -52,7 +46,6 @@ private:
         }
         unsigned long code = *(unsigned long *)res.data;
         void* handle = dlopen("liblog.so",RTLD_NOW);
-
         if(handle == NULL){
             LOGD("handle = NULL");
             return;
@@ -70,9 +63,13 @@ private:
         }
 // makes address writable
         while( (maps_tmp = pmparser_next(maps)) != NULL){
-    if((void *)funPtr >  (void *)maps_tmp->addr_start && (void *)funPtr < (void *)maps_tmp->addr_end){
-        if (mprotect((void *)maps_tmp->addr_start,maps_tmp->length,PROT_EXEC|PROT_WRITE|PROT_READ) != 0){
-       
+            if((void *)funPtr >  (void *)maps_tmp->addr_start && (void *)funPtr < (void *)maps_tmp->addr_end){
+                // pmparser_print(maps_tmp,0);
+                // +w
+                if (mprotect((void *)maps_tmp->addr_start,maps_tmp->length,PROT_EXEC|PROT_WRITE|PROT_READ) != 0){
+                    LOGD("mprotect : %s", strerror(errno));
+                    break;
+                }
 // write original code
 #ifdef __arm__
                 restoreFunArm(funPtr,res.data,res.len);
@@ -89,12 +86,9 @@ private:
             }
         }
         pmparser_free(maps);
-
-
         // Since we do not hook any functions, we should let Zygisk dlclose ourselves
         api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
     }
-
 };
 // run in zygiskd with root privileges
 static companion *impl;
@@ -104,6 +98,5 @@ static void companion_handler(int i) {
     }
     impl->handler(i);
 }
-
 REGISTER_ZYGISK_MODULE(LogMute)
 REGISTER_ZYGISK_COMPANION(companion_handler)
