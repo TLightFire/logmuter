@@ -14,14 +14,13 @@ task clean(type: Delete) {
     delete rootProject.buildDir
 }
 task packageModule(type: Zip) {
-    dependsOn(':module:build')
+    dependsOn(':module:assembleRelease')
     // Module properties
     from('module/src/main/assets') {
         include 'module.prop'
     }
     // Native libraries
-    from('module/build/intermediates/ndkBuild/release/obj') {
-        include '**/*.so'
+    from('module/build/intermediates/stripped_native_libs/release/out/lib') {
         into 'lib'
     }
     // META-INF files
@@ -33,5 +32,5 @@ task packageModule(type: Zip) {
 }
 // Create root build task to run module build and packaging
 task build {
-    dependsOn ':module:build', packageModule
+    dependsOn packageModule
 }
