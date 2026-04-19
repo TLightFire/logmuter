@@ -70,13 +70,9 @@ private:
         }
 // makes address writable
         while( (maps_tmp = pmparser_next(maps)) != NULL){
-            if((void *)funPtr >  maps_tmp->addr_start && (void *)funPtr < maps_tmp->addr_end){
-                // pmparser_print(maps_tmp,0);
-                // +w
-                if (mprotect(maps_tmp->addr_start,maps_tmp->length,PROT_EXEC|PROT_WRITE|PROT_READ) != 0){
-                    LOGD("mprotect : %s", strerror(errno));
-                    break;
-                }
+    if((void *)funPtr >  (void *)maps_tmp->addr_start && (void *)funPtr < (void *)maps_tmp->addr_end){
+        if (mprotect((void *)maps_tmp->addr_start,maps_tmp->length,PROT_EXEC|PROT_WRITE|PROT_READ) != 0){
+       
 // write original code
 #ifdef __arm__
                 restoreFunArm(funPtr,res.data,res.len);
@@ -85,7 +81,7 @@ private:
                 restoreFunArm64(funPtr,res.data,res.len);
 #endif
                 // -w
-                if (mprotect(maps_tmp->addr_start,maps_tmp->length,PROT_EXEC|PROT_READ) != 0){
+                if (mprotect((void *)maps_tmp->addr_start,maps_tmp->length,PROT_EXEC|PROT_READ) != 0){
                     LOGD("mprotect : %s", strerror(errno));
                     break;
                 }
