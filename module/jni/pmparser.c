@@ -1,14 +1,40 @@
+/*
+ * proc maps parser
+ *
+ * This software is under the MIT license
+ *
+ * Copyright (c) 2012-2016, Andrea Borruso <andrea@borruso.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <sys/sysmacros.h>
 #include "pmparser.h"
 
 /**
  * Internal function to split a line from /proc/pid/maps
  * */
-void _pmparser_split_line(
+static void _pmparser_split_line(
         char*buf,
         unsigned long *addr_start,
         unsigned long *addr_end,
@@ -49,24 +75,25 @@ void _pmparser_split_line(
     perm[i] = '\0';
     //offset
     i=0;
+    char tmp[1024];
     while(*buf != ' ') {
-        dev[i] = *buf;
+        tmp[i] = *buf;
         buf++;
         i++;
     }
-    dev[i]='\0';
-    *offset = strtoul(dev, NULL, 16);
+    tmp[i]='\0';
+    *offset = strtoul(tmp, NULL, 16);
     //dev
     i=0;
     while(*buf != ' ') {
-        dev[i] = *buf;
+        tmp[i] = *buf;
         buf++;
         i++;
     }
-    dev[i]='\0';
+    tmp[i]='\0';
     //now parse dev:
     unsigned int maj, min;
-    if(sscanf(dev, "%x:%x", &maj, &min) == 2) {
+    if(sscanf(tmp, "%x:%x", &maj, &min) == 2) {
         *dev = makedev(maj, min);
     } else {
         *dev = 0;
@@ -74,12 +101,12 @@ void _pmparser_split_line(
     //inode
     i=0;
     while(*buf != ' ') {
-        pathname[i] = *buf;
+        tmp[i] = *buf;
         buf++;
         i++;
     }
-    pathname[i]='\0';
-    *inode = strtoul(pathname, NULL, 10);
+    tmp[i]='\0';
+    *inode = strtoul(tmp, NULL, 10);
     //pathname
     if(*buf == ' ') buf++;
     *pathname = buf;
@@ -89,7 +116,7 @@ void _pmparser_split_line(
 /**
  * proc maps parser: parse the maps file of the pid
  * */
-int pmparser_parse(pid_t pid, struct pmparser **procmaps) {
+procmaps_iterator* pmparser_parse(int pid) {
     // open the file
     char maps_path[512];
     if(pid == 0) {
@@ -100,21 +127,20 @@ int pmparser_parse(pid_t pid, struct pmparser **procmaps) {
     FILE *f = fopen(maps_path, "r");
     if(!f) {
         perror("fopen");
-        return -1;
+        return NULL;
     }
     // read line by line
     char buf[1024];
-    int n = 0;
-    struct pmparser *maps = NULL;
+    procmaps_iterator *maps = NULL;
     while(fgets(buf, 1024, f)) {
         // parse the line
         unsigned long addr_start, addr_end, offset;
-        char perm[5], pathname[1024];
+        char perm[5], *pathname;
         dev_t dev;
         ino_t inode;
         _pmparser_split_line(buf, &addr_start, &addr_end, perm, &offset, &dev, &inode, &pathname);
         // add to the list
-        struct pmparser *tmp = malloc(sizeof(struct pmparser));
+        procmaps_iterator *tmp = malloc(sizeof(procmaps_iterator));
         tmp->addr_start = addr_start;
         tmp->addr_end = addr_end;
         strncpy(tmp->perm, perm, 4);
@@ -125,18 +151,16 @@ int pmparser_parse(pid_t pid, struct pmparser **procmaps) {
         tmp->pathname = strdup(pathname);
         tmp->next = maps;
         maps = tmp;
-        n++;
     }
     fclose(f);
-    *procmaps = maps;
-    return n;
+    return maps;
 }
 
 /**
  * Free the list
  * */
-void pmparser_free(struct pmparser *maps) {
-    struct pmparser *tmp;
+void pmparser_free(procmaps_iterator *maps) {
+    procmaps_iterator *tmp;
     while(maps) {
         tmp = maps;
         maps = maps->next;
@@ -148,10 +172,12 @@ void pmparser_free(struct pmparser *maps) {
 #ifdef PM_PARSER_DEBUG
 int main(int argc, char *argv[]) {
     pid_t pid = atoi(argv[1]);
-    struct pmparser *maps;
-    int n = pmparser_parse(pid, &maps);
-    printf("n: %d\n", n);
-    struct pmparser *tmp = maps;
+    procmaps_iterator *maps = pmparser_parse(pid);
+    if(!maps) {
+        perror("pmparser_parse");
+        return -1;
+    }
+    procmaps_iterator *tmp = maps;
     while(tmp) {
         printf("0x%lx-0x%lx %s 0x%lx %d:%d %lu %s\n",
                 tmp->addr_start,
