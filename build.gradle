@@ -15,6 +15,26 @@ task clean(type: Delete) {
     delete rootProject.buildDir
 }
 
+
+
+plugins {
+    id 'com.android.library'
+}
+android {
+    namespace 'com.f19f.logmute'
+    compileSdk 35
+    buildToolsVersion "34.0.0"
+    defaultConfig {
+        targetSdk 35
+        ndkVersion "25.2.9519653"
+    }
+    externalNativeBuild {
+        ndkBuild {
+            path("jni/Android.mk")
+        }
+    }
+}
+
 afterEvaluate {
     task packageModule(type: Zip) {
         dependsOn(':module:build')
