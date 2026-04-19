@@ -1,7 +1,9 @@
 plugins {
     id 'com.android.library'
 }
+
 android {
+    namespace 'com.f19f.logmute'
     compileSdk 35
     buildToolsVersion "34.0.0"
     defaultConfig {
