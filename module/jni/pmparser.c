@@ -1,211 +1,226 @@
 /*
- * proc maps parser
- *
- * This software is under the MIT license
- *
- * Copyright (c) 2012, Andrea Borruso <andrea@borruso.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ @Author	: ouadimjamal@gmail.com
+ @date		: December 2015
+Permission to use, copy, modify, distribute, and sell this software and its
+documentation for any purpose is hereby granted without fee, provided that
+the above copyright notice appear in all copies and that both that
+copyright notice and this permission notice appear in supporting
+documentation.  No representations are made about the suitability of this
+software for any purpose.  It is provided "as is" without express or
+implied warranty.
+*/
+#include <pmparser.h>
+/**
+ * gobal variables
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <sys/sysmacros.h>
-#include "pmparser.h"
-
-/**
- * Internal function to split a line from /proc/pid/maps
- * */
-static void _pmparser_split_line(
-        char*buf,
-        unsigned long *addr_start,
-        unsigned long *addr_end,
-        char *perm,
-        unsigned long *offset,
-        dev_t *dev,
-        ino_t *inode,
-        char **pathname) {
-    // line example:
-    // 08048000-0804c000 r-xp 00000000 08:01 01395214 /lib/ld-uClibc.so.0
-    //
-    int i=0, orig=0;
-    //addr_start
-    while(*buf != '-') {
-        perm[i] = *buf;
-        buf++;
-        i++;
-    }
-    perm[i] = '\0';
-    *addr_start = strtoul(perm, NULL, 16);
-    buf++;
-    //addr_end
-    i=0;
-    while(*buf != ' ') {
-        perm[i] = *buf;
-        buf++;
-        i++;
-    }
-    perm[i] = '\0';
-    *addr_end = strtoul(perm, NULL, 16);
-    //perm
-    i=0;
-    while(*buf != ' ') {
-        perm[i] = *buf;
-        buf++;
-        i++;
-    }
-    perm[i] = '\0';
-    //offset
-    i=0;
-    char tmp[1024];
-    while(*buf != ' ') {
-        tmp[i] = *buf;
-        buf++;
-        i++;
-    }
-    tmp[i]='\0';
-    *offset = strtoul(tmp, NULL, 16);
-    //dev
-    i=0;
-    while(*buf != ' ') {
-        tmp[i] = *buf;
-        buf++;
-        i++;
-    }
-    tmp[i]='\0';
-    //now parse dev:
-    unsigned int maj, min;
-    if(sscanf(tmp, "%x:%x", &maj, &min) == 2) {
-        *dev = makedev(maj, min);
-    } else {
-        *dev = 0;
-    }
-    //inode
-    i=0;
-    while(*buf != ' ') {
-        tmp[i] = *buf;
-        buf++;
-        i++;
-    }
-    tmp[i]='\0';
-    *inode = strtoul(tmp, NULL, 10);
-    //pathname
-    if(*buf == ' ') buf++;
-    *pathname = buf;
-    return;
-}
-
-/**
- * proc maps parser: parse the maps file of the pid
- * */
-procmaps_iterator* pmparser_parse(int pid) {
-    // open the file
-    char maps_path[512];
-    if(pid == 0) {
-        sprintf(maps_path, "/proc/self/maps");
-    } else {
-        sprintf(maps_path, "/proc/%d/maps", pid);
-    }
-    FILE *f = fopen(maps_path, "r");
-    if(!f) {
-        perror("fopen");
+//procmaps_struct* g_last_head=NULL;
+//procmaps_struct* g_current=NULL;
+procmaps_iterator* pmparser_parse(int pid){
+	procmaps_iterator* maps_it = malloc(sizeof(procmaps_iterator));
+	char maps_path[500];
+	if(pid>=0 ){
+		sprintf(maps_path,"/proc/%d/maps",pid);
+	}else{
+		sprintf(maps_path,"/proc/self/maps");
+	}
+    int fd = open(maps_path,O_RDONLY);
+    if(fd < 0){
+        free(maps_it);
         return NULL;
     }
-    // read line by line
-    char buf[1024];
-    procmaps_iterator *it = malloc(sizeof(procmaps_iterator));
-    it->head = NULL;
-    it->current = NULL;
-    while(fgets(buf, 1024, f)) {
-        // parse the line
-        unsigned long addr_start, addr_end, offset;
-        char perm[5], *pathname;
-        dev_t dev;
-        ino_t inode;
-        _pmparser_split_line(buf, &addr_start, &addr_end, perm, &offset, &dev, &inode, &pathname);
-        // add to the list
-        struct procmaps_struct *tmp = malloc(sizeof(struct procmaps_struct));
-        tmp->addr_start = addr_start;
-        tmp->addr_end = addr_end;
-        tmp->length = addr_end - addr_start;
-        strncpy(tmp->perm, perm, 4);
-        tmp->perm[4] = '\0';
-        tmp->offset = offset;
-        tmp->dev = dev;
-        tmp->inode = inode;
-        tmp->pathname = strdup(pathname);
-        tmp->next = it->head;
-        it->head = tmp;
+	int ind=0;char buf[PROCMAPS_LINE_MAX_LENGTH];
+	procmaps_struct* list_maps=NULL;
+	procmaps_struct* tmp;
+	procmaps_struct* current_node=list_maps;
+	char addr1[20]={0},addr2[20]={0}, perm[8]={0}, offset[20]={0}, dev[10]={0},inode[30]={0},pathname[PATH_MAX]={0};
+	char cbuf[PROCMAPS_LINE_MAX_LENGTH];
+	char *split,*pos;
+	int roffset = 0,readed = 0;
+    while((readed = read(fd,cbuf+roffset,RBUF-roffset) )> 0){
+        // printf("read\n");
+        char * loc,*pos = cbuf; 
+        while((loc = strchr(pos,'\n'))!=NULL){
+            memset(buf,0,PROCMAPS_LINE_MAX_LENGTH);
+            int len = loc - pos;
+            memcpy(buf,pos,len);
+            pos+=len+1;
+			{
+				//allocate a node
+				tmp=(procmaps_struct*)malloc(sizeof(procmaps_struct));
+				//fill the node
+				_pmparser_split_line(buf,addr1,addr2,perm,offset, dev,inode,pathname);
+				//printf("#%s",buf);
+				// printf("%s-%s %s %s %s %s\t%s\n",addr1,addr2,perm,offset,dev,inode,pathname);
+				//addr_start & addr_end
+				unsigned long l_addr_start;
+				sscanf(addr1,"%lx",(long unsigned *)&tmp->addr_start );
+				sscanf(addr2,"%lx",(long unsigned *)&tmp->addr_end );
+				//size
+				tmp->length=(unsigned long)(tmp->addr_end-tmp->addr_start);
+				// perm
+				strcpy(tmp->perm,perm);
+				tmp->is_r=(perm[0]=='r');
+				tmp->is_w=(perm[1]=='w');
+				tmp->is_x=(perm[2]=='x');
+				tmp->is_p=(perm[3]=='p');
+				// offset
+				sscanf(offset,"%lx",&tmp->offset );
+				//device
+				strcpy(tmp->dev,dev);
+				//inode
+				tmp->inode=atoi(inode);
+				//pathname
+				strcpy(tmp->pathname,pathname);
+				tmp->next=NULL;
+				//attach the node
+				if(ind==0){
+					list_maps=tmp;
+					list_maps->next=NULL;
+					current_node=list_maps;
+				}
+				current_node->next=tmp;
+				current_node=tmp;
+				ind++;
+				//printf("%s",buf);
+			}
+        }
+        // printf("read %d lines\n",lines);
+        if(pos - cbuf < readed){
+            roffset = cbuf + readed - pos;
+        }else{
+            roffset = 0;
+        }
+        // printf("roffset =  %d",roffset);
+        memcpy(cbuf,pos,roffset);
+        memset(cbuf+roffset,0,RBUF-roffset);
     }
-    fclose(f);
-    it->current = it->head;
-    return it;
+	//close file
+	close(fd);
+	//g_last_head=list_maps;
+	maps_it->head = list_maps;
+	maps_it->current =  list_maps;
+	return maps_it;
 }
-
-/**
- * Get the next element of the iterator
- * */
-struct procmaps_struct* pmparser_next(procmaps_iterator* p_procmaps_it) {
-    struct procmaps_struct *tmp = p_procmaps_it->current;
-    if(tmp) {
-        p_procmaps_it->current = p_procmaps_it->current->next;
-    }
-    return tmp;
+procmaps_struct* pmparser_next(procmaps_iterator* p_procmaps_it){
+	if(p_procmaps_it->current == NULL)
+		return NULL;
+	procmaps_struct* p_current = p_procmaps_it->current;
+	p_procmaps_it->current = p_procmaps_it->current->next;
+	return p_current;
 }
-
-/**
- * Free the list
- * */
-void pmparser_free(procmaps_iterator *p_procmaps_it) {
-    struct procmaps_struct *tmp;
-    while(p_procmaps_it->head) {
-        tmp = p_procmaps_it->head;
-        p_procmaps_it->head = p_procmaps_it->head->next;
-        free(tmp->pathname);
-        free(tmp);
-    }
-    free(p_procmaps_it);
+void pmparser_free(procmaps_iterator* p_procmaps_it){
+	procmaps_struct* maps_list = p_procmaps_it->head;
+	if(maps_list==NULL) return ;
+	procmaps_struct* act=maps_list;
+	procmaps_struct* nxt=act->next;
+	while(act!=NULL){
+		free(act);
+		act=nxt;
+		if(nxt!=NULL)
+			nxt=nxt->next;
+	}
+	free(p_procmaps_it);
 }
-
-#ifdef PM_PARSER_DEBUG
-int main(int argc, char *argv[]) {
-    pid_t pid = atoi(argv[1]);
-    procmaps_iterator *it = pmparser_parse(pid);
-    if(!it) {
-        perror("pmparser_parse");
-        return -1;
-    }
-    struct procmaps_struct *tmp;
-    while( (tmp = pmparser_next(it)) != NULL) {
-        printf("0x%lx-0x%lx %s 0x%lx %d:%d %lu %s\n",
-                tmp->addr_start,
-                tmp->addr_end,
-                tmp->perm,
-                tmp->offset,
-                major(tmp->dev),
-                minor(tmp->dev),
-                tmp->inode,
-                tmp->pathname);
-    }
-    pmparser_free(it);
-    return 0;
+#define CHECK_RANGE if(i > maxlen){return;}
+void _pmparser_split_line(
+		char*buf,char*addr1,char*addr2,
+		char*perm,char* offset,char* device,char*inode,
+		char* pathname){
+	int maxlen = strlen(buf);
+	//70cf800000-70d1c00000 ---p 00000000 00:00 0
+	int orig=0;
+	int i=0;
+	//addr1
+	while(buf[i]!='-'){
+		addr1[i-orig]=buf[i];
+		i++;
+	}
+	addr1[i]='\0';
+	i++;
+	//addr2
+	orig=i;
+	while(buf[i]!='\t' && buf[i]!=' '){
+		addr2[i-orig]=buf[i];
+		i++;
+	}
+	addr2[i-orig]='\0';
+	//perm
+	while(buf[i]=='\t' || buf[i]==' ')
+		i++;
+	orig=i;
+	while(buf[i]!='\t' && buf[i]!=' '){
+		perm[i-orig]=buf[i];
+		i++;
+	}
+	perm[i-orig]='\0';
+	//offset
+	while(buf[i]=='\t' || buf[i]==' '){
+		i++;
+	}
+	orig=i;
+	while(buf[i]!='\t' && buf[i]!=' '){
+		offset[i-orig]=buf[i];
+		i++;
+	}
+	offset[i-orig]='\0';
+	//dev
+	while(buf[i]=='\t' || buf[i]==' '){
+		i++;
+	}
+	orig=i;
+	while(buf[i]!='\t' && buf[i]!=' '){
+		dev[i-orig]=buf[i];
+		i++;
+	}
+	dev[i-orig]='\0';
+	//inode
+	while(buf[i]=='\t' || buf[i]==' '){
+		i++;
+		CHECK_RANGE;
+	}
+	orig=i;
+	while(buf[i]!='\t' && buf[i]!=' '){
+		inode[i-orig]=buf[i];
+		i++;
+		CHECK_RANGE;
+	}
+	inode[i-orig]='\0';
+	//pathname
+	pathname[0]='\0';
+	while(buf[i]=='\t' || buf[i]==' '){
+		i++;
+		CHECK_RANGE;
+	}
+		
+	orig=i;
+	while(buf[i]!='\t' && buf[i]!='\n'){
+		pathname[i-orig]=buf[i];
+		i++;
+		CHECK_RANGE;
+	}
+	pathname[i-orig]='\0';
 }
-#endif
+void pmparser_print(procmaps_struct* map, int order){
+	procmaps_struct* tmp=map;
+	int id=0;
+	if(order<0) order=-1;
+	while(tmp!=NULL){
+		//(unsigned long) tmp->addr_start;
+		if(order==id || order==-1){
+			printf("Backed by:\t%s\n",strlen(tmp->pathname)==0?"[anonym*]":tmp->pathname);
+			printf("Range:\t\t%p-%p\n",tmp->addr_start,tmp->addr_end);
+			printf("Length:\t\t%ld\n",tmp->length);
+			printf("Offset:\t\t%ld\n",tmp->offset);
+			printf("Permissions:\t%s\n",tmp->perm);
+			printf("Inode:\t\t%d\n",tmp->inode);
+			printf("Device:\t\t%s\n",tmp->dev);
+		}
+		if(order!=-1 && id>order)
+			tmp=NULL;
+		else if(order==-1){
+			printf("#################################\n");
+			tmp=tmp->next;
+		}else tmp=tmp->next;
+		id++;
+	}
+}
