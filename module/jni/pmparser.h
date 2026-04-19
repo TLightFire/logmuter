@@ -1,47 +1,62 @@
-#ifndef PMPARSER_H
-#define PMPARSER_H
+/*
+ * proc maps parser
+ *
+ * This software is under the MIT license
+ *
+ * Copyright (c) 2012-2016, Andrea Borruso <andrea@borruso.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+#ifndef PM_PARSER_H
+#define PM_PARSER_H
 
 #include <sys/types.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <limits.h>
-
-#define PROCMAPS_LINE_MAX_LENGTH 1024
-#define RBUF 1024
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct procmaps_struct {
-    void *addr_start; // start address of the area
-    void *addr_end;   // end address
-    size_t length;    // length of the area
-    char perm[5];     // permissions: r w x p
-    int is_r;
-    int is_w;
-    int is_x;
-    int is_p;
-    off_t offset;     // offset into the file
-    char dev[10];     // device major:minor
-    ino_t inode;      // inode number
-    char pathname[PATH_MAX]; // pathname
+struct procmaps_struct {
+    unsigned long addr_start;  // start address of the memory region
+    unsigned long addr_end;    // end address of the memory region
+    char perm[5];              // permissions: r-xp
+    unsigned long offset;      // offset
+    dev_t dev;                 // device
+    ino_t inode;               // inode
+    char *pathname;            // pathname of the library
     struct procmaps_struct *next;
-} procmaps_struct;
+};
 
-typedef struct procmaps_iterator {
-    procmaps_struct *head;
-    procmaps_struct *current;
-} procmaps_iterator;
+typedef struct procmaps_struct procmaps_iterator;
 
+/**
+ * Parse the maps file of the pid
+ * @param pid the pid to parse, 0 for self
+ * @return the iterator to the maps list
+ */
 procmaps_iterator* pmparser_parse(int pid);
-procmaps_struct* pmparser_next(procmaps_iterator* p_procmaps_it);
+
+/**
+ * Free the maps list
+ * @param p_procmaps_it the iterator to free
+ */
 void pmparser_free(procmaps_iterator* p_procmaps_it);
-void pmparser_print(procmaps_struct* map, int order);
 
 #ifdef __cplusplus
 }
