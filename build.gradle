@@ -35,5 +35,7 @@ afterEvaluate {
         archiveFileName = "zygisk-logmute-v1.1.zip"
         destinationDirectory = file("$rootDir/build")
     }
-    tasks.build.dependsOn packageModule
+    tasks.named('build') {
+        it.dependsOn packageModule
+    }
 }
