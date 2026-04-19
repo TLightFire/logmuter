@@ -42,10 +42,8 @@ int ptrace_writedata(pid_t pid, uint8_t *pWriteAddr, uint8_t *pWriteData, size_t
     uint8_t *pCurDestBuf = pWriteAddr;
     long lTmpBuf = 0;
     long i = 0;
-
     nWriteCount = size / sizeof(long);
     nRemainCount = size % sizeof(long);
-
     for (i = 0; i < nWriteCount; i++) {
         memcpy((void *)(&lTmpBuf), pCurSrcBuf, sizeof(long));
         if (ptrace(PTRACE_POKETEXT, pid, (void *)pCurDestBuf, (void *)lTmpBuf) < 0) {
@@ -54,7 +52,6 @@ int ptrace_writedata(pid_t pid, uint8_t *pWriteAddr, uint8_t *pWriteData, size_t
         pCurSrcBuf += sizeof(long);
         pCurDestBuf += sizeof(long);
     }
-
     if (nRemainCount > 0) {
         lTmpBuf = ptrace(PTRACE_PEEKTEXT, pid, pCurDestBuf, NULL);
         memcpy((void *)(&lTmpBuf), pCurSrcBuf, nRemainCount);
@@ -83,7 +80,6 @@ int do_nop(int pid,void* addr){
             ret = 0;
         }
     }
-
 #endif
 #ifdef __aarch64__
     if(ptrace_writedata(pid,(uint8_t*)addr,patch_code,orig_len) == 0){
@@ -108,7 +104,7 @@ int getAddrMap(void *p,int pid,procmaps_struct *res){
         return -1;
     }
     while( (maps_tmp = pmparser_next(maps)) != NULL){
-        if((void *)p >  maps_tmp->addr_start && (void *)p < maps_tmp->addr_end){
+        if((void *)p >  (void *)maps_tmp->addr_start && (void *)p < (void *)maps_tmp->addr_end){
             *res = *maps_tmp;
             ret = 0;
             LOGD("addr found");
@@ -116,7 +112,6 @@ int getAddrMap(void *p,int pid,procmaps_struct *res){
         }
     }
     pmparser_free(maps);
-
     return ret;
 }
 int getOffset(const char* dlname,const char* symbol,uint64_t* res){
@@ -146,7 +141,6 @@ int getOffset(const char* dlname,const char* symbol,uint64_t* res){
     }
     *res = (uint64_t)fun - (uint64_t)local_map.addr_start;
     return 0;
-
 }
 int findXMapByname(int pid,procmaps_struct *res,const char* pattern){
     int ret = -1;
@@ -207,7 +201,7 @@ void genPatchAndBackup(void * addr){
         memcpy(backup_code,(void *)((off_t)addr - 1),orig_len);
         *(uint32_t*) patch_code = *(uint32_t*)thumb_ret_array;
     } else{
-        memcpy(backup_code,(void *)addr,orig_len);
+        memcpy(backup_code,addr,orig_len);
         *(uint32_t*) patch_code = *(uint32_t*)arm_ret_array;
     }
 #endif
@@ -218,7 +212,7 @@ void genPatchAndBackup(void * addr){
     u_int32_t arm64_nop = *(u_int32_t *)arm64_nop_array;
     u_int32_t arm64_ret = *(u_int32_t *)arm64_ret_array;
     u_int32_t head = arm64_nop;
-    u_int32_t end = arm64_ret;
+    u_int32_t end = arm64_autiasp;
     if(*(uint32_t *)begin == arm64_paciasp) {
         head = arm64_paciasp;
         end = arm64_autiasp;
@@ -240,7 +234,6 @@ void genPatchAndBackup(void * addr){
         tmp[i] = arm64_nop;
     }
 #endif
-
 //    } else{
 //        orig_len = 8;
 //        backup_code = (uint8_t *) malloc(orig_len);
@@ -268,7 +261,7 @@ void genPatchAndBackup(void * addr){
 //        }
 //        noplen++;
 //    }
-//    uint32_t *wbuf = (uint32_t*)malloc(noplen*sizeof(uint32_t));
+//    uint32_t *wbuf = (uint32_t*)malloc(noplen*sizeof(uint32));
 //    for(int i = 0;i<noplen;i++){
 //        wbuf[i]=arm64_nop;
 //    }
@@ -276,10 +269,9 @@ void genPatchAndBackup(void * addr){
 //        fprintf(stderr,"lseek : %s\n",strerror(errno));
 //        return -1;
 //    }
-//    write(fd,wbuf,noplen*sizeof(uint32_t));
+//    write(fd,wbuf,noplen*sizeof(uint32));
 //    free(wbuf);
 //    return 0;
 //#ifdef __aarch64__
-
 //#endif
 }
