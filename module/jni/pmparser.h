@@ -3,7 +3,7 @@
  *
  * This software is under the MIT license
  *
- * Copyright (c) 2012-2016, Andrea Borruso <andrea@borruso.com>
+ * Copyright (c) 2012, Andrea Borruso <andrea@borruso.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -35,15 +35,18 @@ extern "C" {
 struct procmaps_struct {
     unsigned long addr_start;  // start address of the memory region
     unsigned long addr_end;    // end address of the memory region
+    unsigned long length;      // length of the memory region
     char perm[5];              // permissions: r-xp
     unsigned long offset;      // offset
     dev_t dev;                 // device
     ino_t inode;               // inode
     char *pathname;            // pathname of the library
-    struct procmaps_struct *next;
 };
 
-typedef struct procmaps_struct procmaps_iterator;
+typedef struct {
+    struct procmaps_struct *current;
+    struct procmaps_struct *head;
+} procmaps_iterator;
 
 /**
  * Parse the maps file of the pid
@@ -51,6 +54,13 @@ typedef struct procmaps_struct procmaps_iterator;
  * @return the iterator to the maps list
  */
 procmaps_iterator* pmparser_parse(int pid);
+
+/**
+ * Get the next element of the iterator
+ * @param p_procmaps_it the iterator
+ * @return the next element, NULL if end of list
+ */
+struct procmaps_struct* pmparser_next(procmaps_iterator* p_procmaps_it);
 
 /**
  * Free the maps list
