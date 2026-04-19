@@ -1,0 +1,6 @@
+id=dynamic_log_filter
+name=动态日志放行模块
+version=1.0
+versionCode=1
+author=YourName
+description=支持动态配置应用日志放行的Magisk模块，无需重刷模块即可实时修改放行包名
